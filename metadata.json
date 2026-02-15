@@ -1,0 +1,8 @@
+{
+  "name": "BI - Semper Vincit - V.1",
+  "description": "A high-performance operational and business intelligence dashboard for Lead-to-Client synchronization, sales tracking, and project management in the solar energy sector.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
