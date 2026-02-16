@@ -1,14 +1,36 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { CustoOperacional, Projeto, Cliente } from '../types';
 
-interface CostManagerProps {
-  custos: CustoOperacional[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-}
+const CostManager: React.FC = () => {
+  const [custos, setCustos] = useState<CustoOperacional[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const CostManager: React.FC<CostManagerProps> = ({ custos, projetos, clientes }) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const custosSnapshot = await getDocs(collection(db, "custos"));
+      const custosData = custosSnapshot.docs.map(doc => ({ ...doc.data(), custoId: doc.id })) as CustoOperacional[];
+      setCustos(custosData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
   const getClientNameByProject = (projetoId: string) => {
     const proj = projetos.find(p => p.projetoId === projetoId);
     if (!proj) return "N/A";
@@ -47,7 +69,11 @@ const CostManager: React.FC<CostManagerProps> = ({ custos, projetos, clientes })
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white/30">
-            {custos.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando custos...</td>
+              </tr>
+            ) : custos.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">
                   Nenhum custo registrado na base operacional v9.9.

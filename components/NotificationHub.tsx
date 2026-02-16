@@ -1,19 +1,61 @@
 
-import React, { useState } from 'react';
-import { Notificacao } from '../types';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
+import { Notificacao, LogAuditoria } from '../src/types';
 import { generateNotificationTemplate } from '../services/geminiService';
+import { useAuth } from '../src/contexts/AuthContext';
+import { notificationService } from '../services/notificationService';
 
-interface NotificationHubProps {
-  notificacoes: Notificacao[];
-  onTriggerManual?: (notif: Partial<Notificacao>) => void;
-}
-
-const NotificationHub: React.FC<NotificationHubProps> = ({ notificacoes, onTriggerManual }) => {
+const NotificationHub: React.FC = () => {
+  const { usuario } = useAuth();
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'email' | 'sms' | 'whatsapp'>('all');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiContext, setAiContext] = useState('');
   const [aiResult, setAiResult] = useState('');
-  
+
+  useEffect(() => {
+    const fetchNotificacoes = async () => {
+      setIsLoading(true);
+      const notificacoesSnapshot = await getDocs(collection(db, "notificacoes"));
+      const notificacoesData = notificacoesSnapshot.docs.map(doc => ({ ...doc.data(), notificacaoId: doc.id })) as Notificacao[];
+      setNotificacoes(notificacoesData);
+      setIsLoading(false);
+    };
+
+    fetchNotificacoes();
+  }, []);
+
+  const sendNotification = async (notif: Omit<Notificacao, 'notificacaoId' | 'status' | 'dataEnvio'>) => {
+    const novaNotificacao: Notificacao = {
+      ...notif,
+      notificacaoId: `NOT_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+      status: 'pendente',
+      dataEnvio: new Date().toLocaleString('pt-BR')
+    };
+    
+    setNotificacoes(prev => [novaNotificacao, ...prev]);
+    const success = await notificationService.notify(novaNotificacao);
+    
+    setNotificacoes(prev => prev.map(n => 
+      n.notificacaoId === novaNotificacao.notificacaoId
+        ? { ...n, status: success ? 'enviada' : 'erro' }
+        : n
+    ));
+    
+    if (success) {
+      const newLog: Omit<LogAuditoria, 'logId'> = {
+        data: new Date().toLocaleString('pt-BR'),
+        usuario: usuario?.email || "sistema@sempervincit.com",
+        acao: `NOTIFICACAO_${notif.tipo.toUpperCase()}`,
+        referencia: notif.trigger
+      };
+      await addDoc(collection(db, 'logs'), newLog);
+    }
+  };
+
   const filteredNotifs = filter === 'all' 
     ? notificacoes 
     : notificacoes.filter(n => n.tipo === filter);
@@ -43,6 +85,10 @@ const NotificationHub: React.FC<NotificationHubProps> = ({ notificacoes, onTrigg
       default: return 'bg-gray-400';
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando hub de notificações...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn">

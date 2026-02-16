@@ -1,13 +1,31 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { AlertaSLA } from '../types';
 
-interface AlertsPanelProps {
-  alertas: AlertaSLA[];
-  onResolve: (alertaId: string) => void;
-}
+const AlertsPanel: React.FC = () => {
+  const [alertas, setAlertas] = useState<AlertaSLA[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const AlertsPanel: React.FC<AlertsPanelProps> = ({ alertas, onResolve }) => {
+  useEffect(() => {
+    const fetchAlertas = async () => {
+      setIsLoading(true);
+      const alertasSnapshot = await getDocs(collection(db, "alertas"));
+      const alertasData = alertasSnapshot.docs.map(doc => ({ ...doc.data(), alertaId: doc.id })) as AlertaSLA[];
+      setAlertas(alertasData);
+      setIsLoading(false);
+    };
+
+    fetchAlertas();
+  }, []);
+
+  const onResolve = async (alertaId: string) => {
+    const alertaRef = doc(db, "alertas", alertaId);
+    await updateDoc(alertaRef, { resolvido: true });
+    setAlertas(prev => prev.map(a => (a.alertaId === alertaId ? { ...a, resolvido: true } : a)));
+  };
+
   const getSeverityColor = (severidade: string) => {
     switch (severidade) {
       case 'critica': return 'bg-rose-100 text-rose-700 border-rose-300';
@@ -27,6 +45,10 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alertas, onResolve }) => {
       default: return '⚪';
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando painel de alertas...</div>;
+  }
 
   const alertasAtivos = alertas.filter(a => !a.resolvido);
 

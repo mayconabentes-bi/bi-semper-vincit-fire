@@ -1,20 +1,47 @@
 
-import React from 'react';
-import { Venda, CustoOperacional, Projeto, Cliente, Proposta, Usuario } from '../types';
-import { PERMISSIONS_MATRIX } from '../constants/permissions';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
+import { Venda, CustoOperacional, Projeto, Cliente, Proposta, Usuario } from '../src/types';
+import { PERMISSIONS_MATRIX } from '../src/constants/permissions';
+import { useAuth } from '../src/contexts/AuthContext';
 
-interface DataConsolidatedProps {
-  vendas: Venda[];
-  custos: CustoOperacional[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-  propostas: Proposta[];
-  currentUser: Usuario;
-}
+const DataConsolidated: React.FC = () => {
+  const { usuario: currentUser } = useAuth();
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [custos, setCustos] = useState<CustoOperacional[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const DataConsolidated: React.FC<DataConsolidatedProps> = ({ vendas, custos, projetos, clientes, propostas, currentUser }) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      const vendasSnapshot = await getDocs(collection(db, "vendas"));
+      const vendasData = vendasSnapshot.docs.map(doc => ({ ...doc.data(), vendaId: doc.id })) as Venda[];
+      setVendas(vendasData);
+
+      const custosSnapshot = await getDocs(collection(db, "custos"));
+      const custosData = custosSnapshot.docs.map(doc => ({ ...doc.data(), custoId: doc.id })) as CustoOperacional[];
+      setCustos(custosData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
   const TAX_RATE = 0.15;
-  const permissions = PERMISSIONS_MATRIX[currentUser.role]?.bi_consolidated;
+  const permissions = currentUser ? PERMISSIONS_MATRIX[currentUser.role]?.bi_consolidated : { exportar: false };
 
   const consolidatedData = custos.map(custo => {
     const proj = projetos.find(p => p.projetoId === custo.projetoId);
@@ -53,6 +80,10 @@ const DataConsolidated: React.FC<DataConsolidatedProps> = ({ vendas, custos, pro
     navigator.clipboard.writeText(csvContent);
     alert("Estrutura DATA_CONSOLIDATED copiada para o clipboard (formato CSV/Excel)!");
   };
+
+  if (isLoading || !currentUser) {
+    return <div className="p-8 text-center">Carregando dados consolidados...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn">

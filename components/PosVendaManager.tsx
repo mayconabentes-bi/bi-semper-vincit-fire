@@ -1,17 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { PosVenda, Projeto, Cliente } from '../types';
 
-interface PosVendaManagerProps {
-  posVendas: PosVenda[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-  // Added onUpdatePosVenda prop to fix TypeScript error in App.tsx
-  onUpdatePosVenda?: (pv: PosVenda) => void;
-}
-
-const PosVendaManager: React.FC<PosVendaManagerProps> = ({ posVendas, projetos, clientes, onUpdatePosVenda }) => {
+const PosVendaManager: React.FC = () => {
+  const [posVendas, setPosVendas] = useState<PosVenda[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editingPV, setEditingPV] = useState<PosVenda | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const posVendasSnapshot = await getDocs(collection(db, "pos-venda"));
+      const posVendasData = posVendasSnapshot.docs.map(doc => ({ ...doc.data(), posVendaId: doc.id })) as PosVenda[];
+      setPosVendas(posVendasData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getClientName = (projetoId: string) => {
     const proj = projetos.find(p => p.projetoId === projetoId);
@@ -32,11 +51,14 @@ const PosVendaManager: React.FC<PosVendaManagerProps> = ({ posVendas, projetos, 
   const totalIndicacoes = posVendas.filter(p => p.indicacaoGerada).length;
   const reviewsGoogle = posVendas.filter(p => p.avaliacaoGoogle).length;
 
-  // Added handleSave to process updates via the new onUpdatePosVenda prop
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingPV && onUpdatePosVenda) {
-      onUpdatePosVenda(editingPV);
+    if (editingPV) {
+      const pvDocRef = doc(db, 'pos-venda', editingPV.posVendaId);
+      const { posVendaId, ...pvData } = editingPV;
+      await updateDoc(pvDocRef, pvData);
+
+      setPosVendas(prev => prev.map(p => p.posVendaId === editingPV.posVendaId ? editingPV : p));
       setEditingPV(null);
     }
   };
@@ -79,7 +101,11 @@ const PosVendaManager: React.FC<PosVendaManagerProps> = ({ posVendas, projetos, 
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {posVendas.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando dados de pós-venda...</td>
+              </tr>
+            ) : posVendas.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">
                   Nenhum projeto finalizado para auditoria de Pós-Venda.

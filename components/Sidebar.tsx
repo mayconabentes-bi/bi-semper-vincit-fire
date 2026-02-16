@@ -36,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userRole, ha
     { id: 'projetos', label: 'Projetos', icon: Icons.Briefcase },
     { id: 'execucoes', label: 'Execuções', icon: Icons.Settings },
     { id: 'custos', label: 'Custos Oper.', icon: Icons.ShoppingCart },
-    { id: 'posvenda', label: 'Pós-Venda', icon: Icons.AI },
+    { id: 'pos-venda', label: 'Pós-Venda', icon: Icons.AI },
     { id: 'bi_consolidated', label: 'BI Consolidado', icon: Icons.AI },
     { id: 'notificacoes', label: 'Hub Notificações', icon: (props: any) => (
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>

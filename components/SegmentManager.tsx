@@ -1,12 +1,50 @@
 
-import React from 'react';
-import { SegmentoCliente } from '../types';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
+import { SegmentoCliente, Cliente, Venda, Proposta, SegmentType } from '../types';
 
-interface SegmentManagerProps {
-  segmentos: SegmentoCliente[];
-}
+const SegmentManager: React.FC = () => {
+  const [segmentos, setSegmentos] = useState<SegmentoCliente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const SegmentManager: React.FC<SegmentManagerProps> = ({ segmentos }) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clienteList = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+
+      const vendasSnapshot = await getDocs(collection(db, "vendas"));
+      const vendaList = vendasSnapshot.docs.map(doc => ({ ...doc.data(), vendaId: doc.id })) as Venda[];
+
+      const propostasSnapshot = await getDocs(collection(db, "propostas"));
+      const propostaList = propostasSnapshot.docs.map(doc => ({ ...doc.data(), propostaId: doc.id })) as Proposta[];
+
+      const segmentosCalculados = clienteList.map(cliente => {
+        const clientSales = vendaList.filter(v => {
+          const prop = propostaList.find(p => p.propostaId === v.propostaId);
+          return prop?.leadId === cliente.leadId;
+        });
+        const totalSpent = clientSales.reduce((sum, v) => sum + v.receita, 0);
+        let segmento: SegmentType = "Standard";
+        if (totalSpent > 50000) segmento = "High Value";
+        else if (clientSales.length === 0) segmento = "New";
+        return {
+          clienteId: cliente.clienteId,
+          nome: cliente.nome,
+          segmento,
+          dataSegmentacao: new Date().toLocaleDateString('pt-BR')
+        };
+      });
+
+      setSegmentos(segmentosCalculados);
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
   const getSegmentStyles = (segment: string) => {
     switch (segment) {
       case 'High Value':
@@ -19,6 +57,10 @@ const SegmentManager: React.FC<SegmentManagerProps> = ({ segmentos }) => {
         return 'bg-gray-50 text-svGray border-gray-200';
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando segmentos...</div>;
+  }
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden shadow-xl animate-fadeIn border border-gray-100">

@@ -1,15 +1,31 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Projeto, Cliente } from '../types';
 
-interface ProjectTrackerProps {
-  projetos: Projeto[];
-  clientes: Cliente[];
-  onUpdateProjeto?: (projeto: Projeto) => void;
-}
-
-const ProjectTracker: React.FC<ProjectTrackerProps> = ({ projetos, clientes, onUpdateProjeto }) => {
+const ProjectTracker: React.FC = () => {
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editingProj, setEditingProj] = useState<Projeto | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getClientName = (clienteId: string) => {
     return clientes.find(c => c.clienteId === clienteId)?.nome || "Cliente DIM";
@@ -25,10 +41,14 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ projetos, clientes, onU
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProj && onUpdateProjeto) {
-      onUpdateProjeto(editingProj);
+    if (editingProj) {
+      const projDocRef = doc(db, 'projetos', editingProj.projetoId);
+      const { projetoId, ...projData } = editingProj;
+      await updateDoc(projDocRef, projData);
+
+      setProjetos(prev => prev.map(p => p.projetoId === editingProj.projetoId ? editingProj : p));
       setEditingProj(null);
     }
   };
@@ -56,7 +76,11 @@ const ProjectTracker: React.FC<ProjectTrackerProps> = ({ projetos, clientes, onU
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {projetos.map((p) => (
+            {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando projetos...</td>
+                </tr>
+            ) : projetos.map((p) => (
               <tr key={p.projetoId} className="hover:bg-svBlue/[0.02] transition-colors group">
                 <td className="px-6 py-4 font-mono text-[10px] font-bold text-svGray">
                   {p.projetoId}

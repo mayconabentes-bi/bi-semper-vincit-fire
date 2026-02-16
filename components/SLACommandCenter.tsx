@@ -1,13 +1,31 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { AlertaSLA } from '../types';
 
-interface SLACommandCenterProps {
-  alertas: AlertaSLA[];
-  onResolveAlerta: (id: string) => void;
-}
+const SLACommandCenter: React.FC = () => {
+  const [alertas, setAlertas] = useState<AlertaSLA[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const SLACommandCenter: React.FC<SLACommandCenterProps> = ({ alertas, onResolveAlerta }) => {
+  useEffect(() => {
+    const fetchAlertas = async () => {
+      setIsLoading(true);
+      const alertasSnapshot = await getDocs(collection(db, "alertas"));
+      const alertasData = alertasSnapshot.docs.map(doc => ({ ...doc.data(), alertaId: doc.id })) as AlertaSLA[];
+      setAlertas(alertasData);
+      setIsLoading(false);
+    };
+
+    fetchAlertas();
+  }, []);
+
+  const resolverAlerta = async (id: string) => {
+    const alertaRef = doc(db, "alertas", id);
+    await updateDoc(alertaRef, { resolvido: true });
+    setAlertas(prev => prev.map(a => (a.alertaId === id ? { ...a, resolvido: true } : a)));
+  };
+
   const activeAlerts = alertas.filter(a => !a.resolvido);
 
   const getSeverityColor = (sev: string) => {
@@ -27,6 +45,10 @@ const SLACommandCenter: React.FC<SLACommandCenterProps> = ({ alertas, onResolveA
       default: return 'bg-blue-100 text-blue-700 border-blue-200';
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando centro de comando SLA...</div>;
+  }
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -100,7 +122,7 @@ const SLACommandCenter: React.FC<SLACommandCenterProps> = ({ alertas, onResolveA
                      <div className="ml-6 text-right shrink-0">
                         <p className="text-[10px] font-bold text-svGray uppercase mb-3 opacity-60">{alerta.dataAlerta}</p>
                         <button 
-                           onClick={() => onResolveAlerta(alerta.alertaId)}
+                           onClick={() => resolverAlerta(alerta.alertaId)}
                            className="px-6 py-2.5 bg-white border border-gray-200 group-hover:border-svSuccess group-hover:text-svSuccess rounded-xl text-[10px] font-black uppercase transition-all shadow-sm"
                         >
                            Resolver Conformidade

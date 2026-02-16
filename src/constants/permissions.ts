@@ -1,5 +1,5 @@
 
-import { UserRole } from '../types';
+import { UserRole } from '@/types';
 
 export const PERMISSIONS_MATRIX: Record<UserRole, Record<string, { visualizar: boolean; criar: boolean; editar: boolean; deletar: boolean; exportar: boolean }>> = {
   [UserRole.SUPER_ADMIN]: {

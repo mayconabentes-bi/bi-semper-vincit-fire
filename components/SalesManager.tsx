@@ -1,17 +1,37 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Venda, Lead, Proposta } from '../types';
 
-interface SalesManagerProps {
-  vendas: Venda[];
-  propostas: Proposta[];
-  leads: Lead[];
-  // Added onUpdateVenda prop to fix TypeScript error in App.tsx
-  onUpdateVenda?: (venda: Venda) => void;
-}
-
-const SalesManager: React.FC<SalesManagerProps> = ({ vendas, propostas, leads, onUpdateVenda }) => {
+const SalesManager: React.FC = () => {
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingVenda, setEditingVenda] = useState<Venda | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      const vendasSnapshot = await getDocs(collection(db, "vendas"));
+      const vendasData = vendasSnapshot.docs.map(doc => ({ ...doc.data(), vendaId: doc.id })) as Venda[];
+      setVendas(vendasData);
+
+      const proposalsSnapshot = await getDocs(collection(db, "propostas"));
+      const proposalsData = proposalsSnapshot.docs.map(doc => ({ ...doc.data(), propostaId: doc.id })) as Proposta[];
+      setPropostas(proposalsData);
+
+      const leadsSnapshot = await getDocs(collection(db, "leads"));
+      const leadsData = leadsSnapshot.docs.map(doc => ({ ...doc.data(), leadId: doc.id })) as Lead[];
+      setLeads(leadsData);
+      
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getLeadNameByProposal = (propostaId: string) => {
     const prop = propostas.find(p => p.propostaId === propostaId);
@@ -27,14 +47,20 @@ const SalesManager: React.FC<SalesManagerProps> = ({ vendas, propostas, leads, o
   const totalRecebido = vendas.reduce((acc, v) => acc + v.receitaRecebida, 0);
   const pendencia = totalReceita - totalRecebido;
 
-  // Added handleSave to process updates via the new onUpdateVenda prop
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingVenda && onUpdateVenda) {
-      onUpdateVenda(editingVenda);
+    if (editingVenda) {
+      const vendaDocRef = doc(db, 'vendas', editingVenda.vendaId);
+      const { vendaId, ...vendaData } = editingVenda;
+      await updateDoc(vendaDocRef, vendaData);
+      setVendas(prev => prev.map(v => v.vendaId === editingVenda.vendaId ? editingVenda : v));
       setEditingVenda(null);
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando vendas...</div>;
+  }
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden shadow-xl animate-fadeIn border border-gray-100 bg-white">

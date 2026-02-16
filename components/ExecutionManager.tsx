@@ -1,17 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Execucao, Projeto, Cliente } from '../types';
 
-interface ExecutionManagerProps {
-  execucoes: Execucao[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-  // Added onUpdateExecucao prop to fix TypeScript error in App.tsx
-  onUpdateExecucao?: (exec: Execucao) => void;
-}
-
-const ExecutionManager: React.FC<ExecutionManagerProps> = ({ execucoes, projetos, clientes, onUpdateExecucao }) => {
+const ExecutionManager: React.FC = () => {
+  const [execucoes, setExecucoes] = useState<Execucao[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editingExec, setEditingExec] = useState<Execucao | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const execucoesSnapshot = await getDocs(collection(db, "execucoes"));
+      const execucoesData = execucoesSnapshot.docs.map(doc => ({ ...doc.data(), execucaoId: doc.id })) as Execucao[];
+      setExecucoes(execucoesData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getClientName = (projetoId: string) => {
     const proj = projetos.find(p => p.projetoId === projetoId);
@@ -25,11 +44,14 @@ const ExecutionManager: React.FC<ExecutionManagerProps> = ({ execucoes, projetos
     return 'bg-rose-100 text-rose-700 border-rose-200';
   };
 
-  // Added handleSave to process updates via the new onUpdateExecucao prop
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingExec && onUpdateExecucao) {
-      onUpdateExecucao(editingExec);
+    if (editingExec) {
+      const execDocRef = doc(db, 'execucoes', editingExec.execucaoId);
+      const { execucaoId, ...execData } = editingExec;
+      await updateDoc(execDocRef, execData);
+
+      setExecucoes(prev => prev.map(ex => ex.execucaoId === editingExec.execucaoId ? editingExec : ex));
       setEditingExec(null);
     }
   };
@@ -66,7 +88,11 @@ const ExecutionManager: React.FC<ExecutionManagerProps> = ({ execucoes, projetos
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {execucoes.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={8} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando execuções...</td>
+              </tr>
+            ) : execucoes.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">
                   Nenhuma execução técnica registrada na base v9.9.

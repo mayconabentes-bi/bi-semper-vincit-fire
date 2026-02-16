@@ -1,16 +1,18 @@
 
-import React, { useState } from 'react';
-import { Lead, LeadStatus, Usuario } from '../types';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
+import { Lead, LeadStatus, Usuario } from '../src/types';
 import { getLeadInsights } from '../services/geminiService';
-import { PERMISSIONS_MATRIX } from '../constants/permissions';
+import { PERMISSIONS_MATRIX } from '../src/constants/permissions';
 
 interface LeadManagerProps {
-  leads: Lead[];
-  onUpdateLeads: (leads: Lead[]) => void;
   currentUser: Usuario;
 }
 
-const LeadManager: React.FC<LeadManagerProps> = ({ leads, onUpdateLeads, currentUser }) => {
+const LeadManager: React.FC<LeadManagerProps> = ({ currentUser }) => {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [aiTip, setAiTip] = useState<string | null>(null);
@@ -31,10 +33,24 @@ const LeadManager: React.FC<LeadManagerProps> = ({ leads, onUpdateLeads, current
     tel1: ''
   });
 
-  const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
+  useEffect(() => {
+    const fetchLeads = async () => {
+      setIsLoading(true);
+      const leadsCollection = collection(db, 'leads');
+      const leadSnapshot = await getDocs(leadsCollection);
+      const leadList = leadSnapshot.docs.map(doc => ({ ...doc.data(), leadId: doc.id }) as Lead);
+      setLeads(leadList);
+      setIsLoading(false);
+    };
+
+    fetchLeads();
+  }, []);
+
+  const handleStatusChange = async (leadId: string, newStatus: LeadStatus) => {
     if (!permissions.editar) return;
-    const updated = leads.map(l => l.leadId === leadId ? { ...l, status: newStatus } : l);
-    onUpdateLeads(updated);
+    const leadDocRef = doc(db, 'leads', leadId);
+    await updateDoc(leadDocRef, { status: newStatus });
+    setLeads(leads.map(l => l.leadId === leadId ? { ...l, status: newStatus } : l));
   };
 
   const showAiInsights = async (lead: Lead) => {
@@ -46,18 +62,18 @@ const LeadManager: React.FC<LeadManagerProps> = ({ leads, onUpdateLeads, current
     setLoadingAi(false);
   };
 
-  const handleAddOrEditLead = (e: React.FormEvent) => {
+  const handleAddOrEditLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingLead) {
       if (!permissions.editar) return;
-      const updated = leads.map(l => l.leadId === editingLead.leadId ? editingLead : l);
-      onUpdateLeads(updated);
+      const leadDocRef = doc(db, 'leads', editingLead.leadId);
+      const { leadId, ...leadData } = editingLead;
+      await updateDoc(leadDocRef, leadData);
+      setLeads(leads.map(l => l.leadId === editingLead.leadId ? editingLead : l));
     } else {
       if (!permissions.criar) return;
-      const leadId = `LEAD_${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-      const lead: Lead = {
+      const leadData: Omit<Lead, 'leadId'> = {
         ...newLead,
-        leadId,
         clienteId: '',
         cnpj: '',
         cpf: '',
@@ -68,7 +84,8 @@ const LeadManager: React.FC<LeadManagerProps> = ({ leads, onUpdateLeads, current
         slaQualificacao: 'Em Conformidade',
         tel2: ''
       };
-      onUpdateLeads([...leads, lead]);
+      const docRef = await addDoc(collection(db, 'leads'), leadData);
+      setLeads([...leads, { ...leadData, leadId: docRef.id }]);
     }
     setIsModalOpen(false);
     setEditingLead(null);
@@ -83,15 +100,20 @@ const LeadManager: React.FC<LeadManagerProps> = ({ leads, onUpdateLeads, current
     setIsModalOpen(true);
   };
 
-  const handleDeleteLead = (leadId: string) => {
+  const handleDeleteLead = async (leadId: string) => {
     if (!permissions.deletar) {
       alert("Permissão negada para exclusão.");
       return;
     }
     if (window.confirm("Deseja realmente excluir este lead?")) {
-      onUpdateLeads(leads.filter(l => l.leadId !== leadId));
+      await deleteDoc(doc(db, "leads", leadId));
+      setLeads(leads.filter(l => l.leadId !== leadId));
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando leads...</div>;
+  }
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

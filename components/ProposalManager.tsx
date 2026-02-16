@@ -1,15 +1,30 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Proposta, Lead } from '../types';
 
-interface ProposalManagerProps {
-  propostas: Proposta[];
-  leads: Lead[];
-  onUpdateProposta?: (prop: Proposta) => void;
-}
-
-const ProposalManager: React.FC<ProposalManagerProps> = ({ propostas, leads, onUpdateProposta }) => {
+const ProposalManager: React.FC = () => {
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingProp, setEditingProp] = useState<Proposta | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const proposalsSnapshot = await getDocs(collection(db, "propostas"));
+      const proposalsData = proposalsSnapshot.docs.map(doc => ({ ...doc.data(), propostaId: doc.id })) as Proposta[];
+      setPropostas(proposalsData);
+
+      const leadsSnapshot = await getDocs(collection(db, "leads"));
+      const leadsData = leadsSnapshot.docs.map(doc => ({ ...doc.data(), leadId: doc.id })) as Lead[];
+      setLeads(leadsData);
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getLeadName = (leadId: string) => {
     return leads.find(l => l.leadId === leadId)?.nome || "Lead N/A";
@@ -29,17 +44,26 @@ const ProposalManager: React.FC<ProposalManagerProps> = ({ propostas, leads, onU
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProp && onUpdateProposta) {
+    if (editingProp) {
       // Auto-calculate final value and margin
       const valorFinal = editingProp.valorBruto * (1 - editingProp.descontoPercentual / 100);
       const margem = valorFinal > 0 ? ((valorFinal - editingProp.custoEstimado) / valorFinal) * 100 : 0;
       const updated = { ...editingProp, valorFinal, margemPercentual: margem };
-      onUpdateProposta(updated);
+      
+      const propDocRef = doc(db, 'propostas', updated.propostaId);
+      const { propostaId, ...propData } = updated;
+      await updateDoc(propDocRef, propData);
+
+      setPropostas(prev => prev.map(p => p.propostaId === updated.propostaId ? updated : p));
       setEditingProp(null);
     }
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando propostas...</div>;
+  }
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden shadow-xl animate-fadeIn border border-gray-100 bg-white">

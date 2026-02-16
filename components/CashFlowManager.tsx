@@ -1,17 +1,48 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Venda, CustoOperacional, Compra, Projeto, Cliente } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-interface CashFlowManagerProps {
-  vendas: Venda[];
-  custos: CustoOperacional[];
-  purchases: Compra[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-}
+const CashFlowManager: React.FC = () => {
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [custos, setCustos] = useState<CustoOperacional[]>([]);
+  const [purchases, setPurchases] = useState<Compra[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const CashFlowManager: React.FC<CashFlowManagerProps> = ({ vendas, custos, purchases, projetos, clientes }) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      const vendasSnapshot = await getDocs(collection(db, "vendas"));
+      const vendasData = vendasSnapshot.docs.map(doc => ({ ...doc.data(), vendaId: doc.id })) as Venda[];
+      setVendas(vendasData);
+
+      const custosSnapshot = await getDocs(collection(db, "custos"));
+      const custosData = custosSnapshot.docs.map(doc => ({ ...doc.data(), custoId: doc.id })) as CustoOperacional[];
+      setCustos(custosData);
+
+      const purchasesSnapshot = await getDocs(collection(db, "compras"));
+      const purchasesData = purchasesSnapshot.docs.map(doc => ({ ...doc.data(), compraId: doc.id })) as Compra[];
+      setPurchases(purchasesData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
   const TAX_RATE = 0.15; // Alíquota estimada de 15% (Impostos)
 
   const formatCurrency = (val: number) => 
@@ -47,6 +78,10 @@ const CashFlowManager: React.FC<CashFlowManagerProps> = ({ vendas, custos, purch
     if (!proj) return "N/A";
     return clientes.find(c => c.clienteId === proj.clienteId)?.nome || "Desconhecido";
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando fluxo de caixa...</div>;
+  }
 
   return (
     <div className="space-y-8 animate-fadeIn">

@@ -1,19 +1,38 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Cliente } from '../types';
 
 interface ClientListProps {
-  clientes: Cliente[];
-  onUpdateCliente?: (cliente: Cliente) => void;
+  // Props are no longer needed as the component will fetch its own data.
 }
 
-const ClientList: React.FC<ClientListProps> = ({ clientes, onUpdateCliente }) => {
+const ClientList: React.FC<ClientListProps> = () => {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    const fetchClients = async () => {
+      setIsLoading(true);
+      const querySnapshot = await getDocs(collection(db, "clientes"));
+      const clientsData = querySnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientsData);
+      setIsLoading(false);
+    };
+
+    fetchClients();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingClient && onUpdateCliente) {
-      onUpdateCliente(editingClient);
+    if (editingClient) {
+      const clientDocRef = doc(db, 'clientes', editingClient.clienteId);
+      const { clienteId, ...clientData } = editingClient;
+      await updateDoc(clientDocRef, clientData);
+      
+      setClientes(prev => prev.map(c => c.clienteId === editingClient.clienteId ? editingClient : c));
       setEditingClient(null);
     }
   };
@@ -45,7 +64,11 @@ const ClientList: React.FC<ClientListProps> = ({ clientes, onUpdateCliente }) =>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {clientes.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic">Carregando clientes...</td>
+              </tr>
+            ) : clientes.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic">Base DIM vazia. Converta Leads Qualificados.</td>
               </tr>

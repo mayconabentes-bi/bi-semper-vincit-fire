@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../src/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   modulo: string;

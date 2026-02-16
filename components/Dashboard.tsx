@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { KPIData, Venda, Lead, Proposta, PosVenda, LeadStatus } from '../types';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
+import { KPIData, Venda, Lead, Proposta, PosVenda, LeadStatus, CustoOperacional } from '../src/types'; // Caminho corrigido
 import { getDashboardSummary } from '../services/geminiService';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -10,14 +12,45 @@ import {
 interface DashboardProps {
   kpis: KPIData;
   leadsCount: number;
-  vendas: Venda[];
-  leads: Lead[];
-  propostas: Proposta[];
-  posVendas: PosVenda[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ kpis, leadsCount, vendas, leads, propostas, posVendas }) => {
+const Dashboard: React.FC<DashboardProps> = ({ kpis, leadsCount }) => {
   const [aiSummary, setAiSummary] = useState("Sincronizando Business Intelligence...");
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [custos, setCustos] = useState<CustoOperacional[]>([]);
+  const [posVendas, setPosVendas] = useState<PosVenda[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const vendasSnapshot = await getDocs(collection(db, "vendas"));
+      const vendasData = vendasSnapshot.docs.map(doc => ({ ...doc.data(), vendaId: doc.id })) as Venda[];
+      setVendas(vendasData);
+
+      const propostasSnapshot = await getDocs(collection(db, "propostas"));
+      const propostasData = propostasSnapshot.docs.map(doc => ({ ...doc.data(), propostaId: doc.id })) as Proposta[];
+      setPropostas(propostasData);
+
+      const leadsSnapshot = await getDocs(collection(db, "leads"));
+      const leadsData = leadsSnapshot.docs.map(doc => ({ ...doc.data(), leadId: doc.id })) as Lead[];
+      setLeads(leadsData);
+
+      const custosSnapshot = await getDocs(collection(db, "custos"));
+      const custosData = custosSnapshot.docs.map(doc => ({ ...doc.data(), custoId: doc.id })) as CustoOperacional[];
+      setCustos(custosData);
+
+      const posVendasSnapshot = await getDocs(collection(db, "pos-venda"));
+      const posVendasData = posVendasSnapshot.docs.map(doc => ({ ...doc.data(), posVendaId: doc.id })) as PosVenda[];
+      setPosVendas(posVendasData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -27,48 +60,80 @@ const Dashboard: React.FC<DashboardProps> = ({ kpis, leadsCount, vendas, leads, 
     fetchSummary();
   }, [kpis, leadsCount]);
 
-  // Cálculos Reais para Gráficos
   const revenueHistory = useMemo(() => {
-    // Agrupar vendas por mês (Mockando últimos 6 meses para visualização)
-    const months = ['Set', 'Out', 'Nov', 'Dez', 'Jan', 'Fev'];
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      return { month: d.getMonth(), year: d.getFullYear(), name: d.toLocaleString('default', { month: 'short' }) };
+    }).reverse();
+
     return months.map(m => {
-      // Em um app real, filtraríamos as vendas pela dataFechamento
-      const monthSales = m === 'Fev' ? vendas.reduce((acc, v) => acc + v.receita, 0) : Math.random() * 20000;
+      const monthSales = vendas.filter(v => {
+        const [day, month, year] = v.dataFechamento.split('/').map(Number);
+        return month - 1 === m.month && year === m.year;
+      });
+      const totalRevenue = monthSales.reduce((acc, v) => acc + v.receita, 0);
+
       return {
-        name: m,
-        Residencial: monthSales * 0.6,
-        Comercial: monthSales * 0.3,
-        Industrial: monthSales * 0.1
+        name: m.name,
+        Receita: totalRevenue,
       };
     });
   }, [vendas]);
 
   const cacLtvData = useMemo(() => {
+    const marketingCosts = custos.filter(c => c.categoria === 'Marketing').reduce((acc, c) => acc + c.valor, 0);
+    const totalLeads = leads.length > 0 ? leads.length : 1;
+    const cac = marketingCosts / totalLeads;
+
     const origens = Array.from(new Set(leads.map(l => l.origem)));
     return origens.map(o => {
       const leadsDaOrigem = leads.filter(l => l.origem === o);
-      const vendasDaOrigem = vendas.filter(v => {
-        const prop = propostas.find(p => p.propostaId === v.propostaId);
-        const lead = leads.find(l => l.leadId === prop?.leadId);
-        return lead?.origem === o;
-      });
-      
+      const vendasDaOrigem = vendas.filter(v => propostas.some(p => p.propostaId === v.propostaId && leads.some(l => l.leadId === p.leadId && l.origem === o)));
       const receitaTotal = vendasDaOrigem.reduce((acc, v) => acc + v.receita, 0);
       const ltv = leadsDaOrigem.length > 0 ? receitaTotal / leadsDaOrigem.length : 0;
       
       return {
         name: o,
-        CAC: o === 'Google Ads' ? 1200 : 200, // CAC fixo simulado por canal
-        LTV: ltv || Math.random() * 5000
+        CAC: cac, // Use calculated CAC
+        LTV: ltv
       };
     });
-  }, [leads, vendas, propostas]);
+  }, [leads, vendas, propostas, custos]);
 
-  const churnData = useMemo(() => [
-    { week: 'W1', rate: 1.2 }, { week: 'W2', rate: 1.5 },
-    { week: 'W3', rate: 1.1 }, { week: 'W4', rate: 0.9 },
-    { week: 'W5', rate: 0.8 }, { week: 'W6', rate: 0.5 },
-  ], []);
+  const churnData = useMemo(() => {
+    const weeks = Array.from({ length: 6 }, (_, i) => {
+        const end = new Date();
+        end.setDate(end.getDate() - (i * 7));
+        const start = new Date(end);
+        start.setDate(start.getDate() - 7);
+        return { start, end, name: `W${6-i}` };
+    }).reverse();
+
+    return weeks.map(week => {
+        const lostLeadsInWeek = leads.filter(lead => {
+            if (lead.status === LeadStatus.PERDIDO) {
+                const [day, month, year] = lead.dataEntrada.split('/').map(Number);
+                const leadDate = new Date(year, month - 1, day);
+                return leadDate >= week.start && leadDate <= week.end;
+            }
+            return false;
+        });
+        
+        const totalLeadsInWeek = leads.filter(lead => {
+             const [day, month, year] = lead.dataEntrada.split('/').map(Number);
+             const leadDate = new Date(year, month - 1, day);
+             return leadDate >= week.start && leadDate <= week.end;
+        });
+
+        const churnRate = totalLeadsInWeek.length > 0 ? (lostLeadsInWeek.length / totalLeadsInWeek.length) * 100 : 0;
+        
+        return {
+            week: week.name,
+            rate: parseFloat(churnRate.toFixed(1))
+        };
+    });
+  }, [leads]);
 
   const npsData = useMemo(() => {
     const promotores = posVendas.filter(p => p.nps >= 9).length;
@@ -115,6 +180,10 @@ const Dashboard: React.FC<DashboardProps> = ({ kpis, leadsCount, vendas, leads, 
       </ResponsiveContainer>
     </div>
   );
+
+  if (isLoading) {
+    return <div>Carregando...</div>; 
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn bg-svAnthracite p-8 rounded-[2rem] text-white">
@@ -198,14 +267,12 @@ const Dashboard: React.FC<DashboardProps> = ({ kpis, leadsCount, vendas, leads, 
           <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-6 italic">Performance Mensal Acumulada</h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              {/* FIXED: Removed extra AreaChart closing tag and corrected structure */}
               <AreaChart data={revenueHistory}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 10}} />
                 <YAxis hide />
                 <Tooltip contentStyle={{ backgroundColor: '#1e1e1e', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }} />
-                <Area type="monotone" dataKey="Residencial" stackId="1" stroke="#1b3a82" fill="#1b3a82" fillOpacity={0.6} />
-                <Area type="monotone" dataKey="Comercial" stackId="1" stroke="#b26e2e" fill="#b26e2e" fillOpacity={0.6} />
+                <Area type="monotone" dataKey="Receita" stackId="1" stroke="#1b3a82" fill="#1b3a82" fillOpacity={0.6} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

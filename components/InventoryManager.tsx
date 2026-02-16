@@ -1,17 +1,16 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { ItemEstoque, MovimentacaoEstoque } from '../types';
 
-interface InventoryManagerProps {
-  items: ItemEstoque[];
-  movements: MovimentacaoEstoque[];
-  onAddMovement: (mov: MovimentacaoEstoque) => void;
-  onAddItem: (item: ItemEstoque) => void;
-}
-
-const InventoryManager: React.FC<InventoryManagerProps> = ({ items, movements, onAddMovement, onAddItem }) => {
+const InventoryManager: React.FC = () => {
+  const [items, setItems] = useState<ItemEstoque[]>([]);
+  const [movements, setMovements] = useState<MovimentacaoEstoque[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+
   const [newMovement, setNewMovement] = useState({
     itemId: '',
     tipo: 'Entrada' as 'Entrada' | 'Saída',
@@ -26,6 +25,23 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ items, movements, o
     pontoPedido: 0
   });
 
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const itemsSnapshot = await getDocs(collection(db, "itens-estoque"));
+      const itemsData = itemsSnapshot.docs.map(doc => ({ ...doc.data(), itemId: doc.id })) as ItemEstoque[];
+      setItems(itemsData);
+
+      const movementsSnapshot = await getDocs(collection(db, "movimentacoes-estoque"));
+      const movementsData = movementsSnapshot.docs.map(doc => ({ ...doc.data(), movId: doc.id })) as MovimentacaoEstoque[];
+      setMovements(movementsData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
   const calculateBalance = (itemId: string) => {
     const itemMovements = movements.filter(m => m.itemId === itemId);
     const entries = itemMovements.filter(m => m.tipo === 'Entrada').reduce((acc, m) => acc + m.quantidade, 0);
@@ -33,29 +49,30 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ items, movements, o
     return entries - exits;
   };
 
-  const handleAddMovement = (e: React.FormEvent) => {
+  const handleAddMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMovement.itemId || newMovement.quantidade <= 0) return;
     
-    onAddMovement({
-      movId: `MOV_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      itemId: newMovement.itemId,
-      tipo: newMovement.tipo,
-      quantidade: newMovement.quantidade,
+    const movementData = {
+      ...newMovement,
       data: new Date().toLocaleDateString('pt-BR'),
-      referenciaId: newMovement.referenciaId
-    });
+    };
+
+    const docRef = await addDoc(collection(db, 'movimentacoes-estoque'), movementData);
+    setMovements(prev => [...prev, { ...movementData, movId: docRef.id }]);
+    
     setIsModalOpen(false);
     setNewMovement({ itemId: '', tipo: 'Entrada', quantidade: 0, referenciaId: '' });
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
+  const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItem.nome) return;
-    onAddItem({
-      itemId: `ITM_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      ...newItem
-    });
+
+    const itemData = { ...newItem };
+    const docRef = await addDoc(collection(db, 'itens-estoque'), itemData);
+    setItems(prev => [...prev, { ...itemData, itemId: docRef.id }]);
+
     setIsItemModalOpen(false);
     setNewItem({ nome: '', categoria: 'Painel', unidade: 'UN', pontoPedido: 0 });
   };
@@ -97,7 +114,9 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ items, movements, o
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item) => {
+              {isLoading ? (
+                <tr><td colSpan={6} className="p-8 text-center text-svGray italic">Carregando itens...</td></tr>
+              ) : items.map((item) => {
                 const balance = calculateBalance(item.itemId);
                 const entries = movements.filter(m => m.itemId === item.itemId && m.tipo === 'Entrada').reduce((acc, m) => acc + m.quantidade, 0);
                 const exits = movements.filter(m => m.itemId === item.itemId && m.tipo === 'Saída').reduce((acc, m) => acc + m.quantidade, 0);
@@ -166,7 +185,9 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ items, movements, o
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {[...movements].reverse().slice(0, 10).map((m) => (
+              {isLoading ? (
+                <tr><td colSpan={5} className="p-6 text-center text-svGray italic">Carregando movimentações...</td></tr>
+              ) : [...movements].reverse().slice(0, 10).map((m) => (
                 <tr key={m.movId} className="text-xs">
                   <td className="px-6 py-3 text-svGray">{m.data}</td>
                   <td className="px-6 py-3 font-bold text-svBlue">{items.find(i => i.itemId === m.itemId)?.nome || m.itemId}</td>

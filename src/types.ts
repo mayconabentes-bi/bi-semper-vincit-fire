@@ -30,6 +30,7 @@ export interface Usuario {
   role: UserRole;
   departamento: string;
   ativo: boolean;
+  dataCriacao: string;
   dataUltimoAcesso: string;
   fotoPerfil?: string;
 }

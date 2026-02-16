@@ -1,106 +1,56 @@
 
-import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import React from 'react';
+import { useAuth } from '../src/contexts/AuthContext';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isLoading, error } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErro('');
-    setIsLoading(true);
-
-    const success = await login(email, senha);
-    
-    if (!success) {
-      setErro('Credenciais incorretas ou acesso bloqueado.');
-      setIsLoading(false);
-    }
+  const handleGoogleLogin = async () => {
+    await login();
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-svBlue via-svBlue/95 to-svCopper p-4 animate-fadeIn">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4 font-sans">
       <div className="w-full max-w-md">
-        <div className="glass-card rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20">
-          {/* Header */}
-          <div className="p-10 bg-white/40 backdrop-blur-xl border-b border-gray-100/50 text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-gradient-to-br from-svBlue to-svCopper mb-6 shadow-2xl shadow-svBlue/20">
-              <span className="font-black text-3xl text-white italic tracking-tighter">SV</span>
-            </div>
-            <h1 className="text-3xl font-black text-svBlue tracking-tighter uppercase italic">
-              Semper Vincit
-            </h1>
-            <p className="text-[10px] font-bold text-svGray tracking-[0.2em] uppercase mt-2">
-              Intelligence Layer 2026
-            </p>
+        
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          
+          <div className="text-center mb-8">
+            <img src="/Logo_Semper.png" alt="Semper Vincit Logo" className="w-48 mx-auto mb-6" />
+            <h1 className="text-2xl font-bold text-gray-800">Bem-vindo à Plataforma</h1>
+            <p className="text-gray-500 mt-2">Faça login com sua conta Google para continuar.</p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-10 space-y-6">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-svGray uppercase tracking-widest mb-2 block px-1">
-                E-mail Corporativo
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl border-2 border-gray-100 focus:border-svBlue focus:outline-none transition-all text-sm font-medium bg-white/50 placeholder-gray-300"
-                placeholder="ex: admin@sempervincit.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-svGray uppercase tracking-widest mb-2 block px-1">
-                Chave de Acesso
-              </label>
-              <input
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl border-2 border-gray-100 focus:border-svBlue focus:outline-none transition-all text-sm font-medium bg-white/50 placeholder-gray-300"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {erro && (
-              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl animate-fadeIn">
-                <p className="text-[10px] font-bold text-rose-700 uppercase tracking-widest text-center">{erro}</p>
+          <div className="space-y-6">
+            {error && (
+              <div className="p-3 bg-red-50 border-l-4 border-red-400">
+                <p className="text-sm font-medium text-red-800">{error}</p>
               </div>
             )}
 
             <button
-              type="submit"
+              onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="w-full py-5 bg-gradient-to-r from-svBlue to-svCopper text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Estabelecendo Conexão...' : 'Entrar no Sistema'}
+              <svg className="w-5 h-5" viewBox="0 0 48 48">
+                <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                <path fill="#FF3D00" d="M6.306 14.691c-1.229 2.22-1.996 4.793-1.996 7.558s.767 5.338 1.996 7.558l-5.657 5.657C.637 32.476 0 28.456 0 24s.637-8.476 2.649-11.816l4.657-4.542z"/>
+                <path fill="#4CAF50" d="M24 48c5.268 0 10.046-1.953 13.694-5.239l-5.657-5.657C29.842 39.154 27.059 40 24 40c-5.223 0-9.651-3.343-11.303-8H6.389c1.996 6.302 7.731 11 14.611 11h3z"/>
+                <path fill="#1976D2" d="M43.611 20.083l-5.657 5.657c-1.332-1.246-2.93-2.223-4.704-2.825V20h-9.25V12h14.909c.251 1.266.389 2.576.389 3.917z"/>
+              </svg>
+              <span>
+                {isLoading ? 'Autenticando...' : 'Entrar com Google'}
+              </span>
             </button>
-          </form>
-
-          {/* Footer */}
-          <div className="p-8 bg-gray-50/50 border-t border-gray-100">
-            <div className="flex flex-col items-center space-y-3">
-              <p className="text-[9px] text-center text-svGray font-bold uppercase tracking-widest opacity-60">
-                Acesso Seguro • Semper Vincit Intelligence
-              </p>
-              <div className="px-4 py-2 bg-svBlue/5 rounded-xl border border-svBlue/10 text-center">
-                <p className="text-[8px] font-black text-svBlue uppercase tracking-tighter mb-1">Credenciais Demonstrativas:</p>
-                <code className="text-[9px] font-mono text-svBlue font-bold">admin@sempervincit.com / admin123</code>
-              </div>
-            </div>
           </div>
+          
         </div>
-        
-        <div className="mt-8 text-center opacity-30">
-           <p className="text-[9px] font-bold text-white uppercase tracking-[0.3em]">Encrypted Connection Secured by SV-Engine</p>
+
+        <div className="mt-6 text-center">
+          <p className="text-xs text-gray-500">&copy; {new Date().getFullYear()} Semper Vincit. Acesso seguro e monitorizado.</p>
         </div>
+
       </div>
     </div>
   );

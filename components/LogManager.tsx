@@ -1,18 +1,37 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { LogAuditoria } from '../types';
 
-interface LogManagerProps {
-  logs: LogAuditoria[];
-}
+const LogManager: React.FC = () => {
+  const [logs, setLogs] = useState<LogAuditoria[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const LogManager: React.FC<LogManagerProps> = ({ logs }) => {
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setIsLoading(true);
+      const logsSnapshot = await getDocs(collection(db, "logs"));
+      const logsData = logsSnapshot.docs.map(doc => ({ ...doc.data() }) as LogAuditoria);
+      // Sort logs by date in descending order
+      logsData.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+      setLogs(logsData);
+      setIsLoading(false);
+    };
+
+    fetchLogs();
+  }, []);
+
   const getActionColor = (acao: string) => {
     if (acao.includes('VENDA')) return 'text-emerald-400 border-emerald-900/50';
     if (acao.includes('ERRO')) return 'text-rose-400 border-rose-900/50';
     if (acao.includes('SYNC') || acao.includes('AUTO')) return 'text-blue-400 border-blue-900/50';
     return 'text-gray-400 border-gray-800';
   };
+
+  if (isLoading) {
+    return <div className="p-8 text-center">Carregando logs de auditoria...</div>;
+  }
 
   return (
     <div className="glass-card rounded-3xl overflow-hidden shadow-2xl border border-gray-900 bg-[#0d1117] animate-fadeIn">

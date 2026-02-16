@@ -1,15 +1,31 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { VisitaTecnica, Lead } from '../types';
 
-interface VisitaManagerProps {
-  visitas: VisitaTecnica[];
-  leads: Lead[];
-  onUpdateVisita?: (visita: VisitaTecnica) => void;
-}
-
-const VisitaManager: React.FC<VisitaManagerProps> = ({ visitas, leads, onUpdateVisita }) => {
+const VisitaManager: React.FC = () => {
+  const [visitas, setVisitas] = useState<VisitaTecnica[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [editingVisita, setEditingVisita] = useState<VisitaTecnica | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const visitasSnapshot = await getDocs(collection(db, "visitas"));
+      const visitasData = visitasSnapshot.docs.map(doc => ({ ...doc.data(), visitaId: doc.id })) as VisitaTecnica[];
+      setVisitas(visitasData);
+
+      const leadsSnapshot = await getDocs(collection(db, "leads"));
+      const leadsData = leadsSnapshot.docs.map(doc => ({ ...doc.data(), leadId: doc.id })) as Lead[];
+      setLeads(leadsData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getLeadName = (leadId: string) => {
     return leads.find(l => l.leadId === leadId)?.nome || "Lead Desconhecido";
@@ -23,10 +39,14 @@ const VisitaManager: React.FC<VisitaManagerProps> = ({ visitas, leads, onUpdateV
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingVisita && onUpdateVisita) {
-      onUpdateVisita(editingVisita);
+    if (editingVisita) {
+      const visitaDocRef = doc(db, 'visitas', editingVisita.visitaId);
+      const { visitaId, ...visitaData } = editingVisita;
+      await updateDoc(visitaDocRef, visitaData);
+
+      setVisitas(prev => prev.map(v => v.visitaId === editingVisita.visitaId ? editingVisita : v));
       setEditingVisita(null);
     }
   };
@@ -54,7 +74,11 @@ const VisitaManager: React.FC<VisitaManagerProps> = ({ visitas, leads, onUpdateV
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white/30">
-            {visitas.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando visitas...</td>
+              </tr>
+            ) : visitas.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">
                   Nenhuma visita técnica agendada.

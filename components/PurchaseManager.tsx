@@ -1,18 +1,37 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { db } from '../src/firebase';
 import { Compra, Projeto, Cliente } from '../types';
 
-interface PurchaseManagerProps {
-  purchases: Compra[];
-  projetos: Projeto[];
-  clientes: Cliente[];
-  onUpdatePurchase: (purchase: Compra) => void;
-  onAddPurchase: (purchase: Compra) => void;
-}
-
-const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, projetos, clientes, onUpdatePurchase, onAddPurchase }) => {
+const PurchaseManager: React.FC = () => {
+  const [purchases, setPurchases] = useState<Compra[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Compra | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const purchasesSnapshot = await getDocs(collection(db, "compras"));
+      const purchasesData = purchasesSnapshot.docs.map(doc => ({ ...doc.data(), compraId: doc.id })) as Compra[];
+      setPurchases(purchasesData);
+
+      const projetosSnapshot = await getDocs(collection(db, "projetos"));
+      const projetosData = projetosSnapshot.docs.map(doc => ({ ...doc.data(), projetoId: doc.id })) as Projeto[];
+      setProjetos(projetosData);
+
+      const clientesSnapshot = await getDocs(collection(db, "clientes"));
+      const clientesData = clientesSnapshot.docs.map(doc => ({ ...doc.data(), clienteId: doc.id })) as Cliente[];
+      setClientes(clientesData);
+
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const getProjectClientName = (projetoId: string) => {
     const proj = projetos.find(p => p.projetoId === projetoId);
@@ -33,14 +52,23 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, projetos, 
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingPurchase) {
-      if (purchases.find(p => p.compraId === editingPurchase.compraId)) {
-        onUpdatePurchase(editingPurchase);
+      // Check if it's a new purchase by seeing if it exists in the current state
+      const isNew = !purchases.some(p => p.compraId === editingPurchase.compraId);
+
+      if (isNew) {
+        const { compraId, ...newPurchaseData } = editingPurchase;
+        const docRef = await addDoc(collection(db, 'compras'), newPurchaseData);
+        setPurchases(prev => [...prev, { ...editingPurchase, compraId: docRef.id }]);
       } else {
-        onAddPurchase(editingPurchase);
+        const purchaseDocRef = doc(db, 'compras', editingPurchase.compraId);
+        const { compraId, ...purchaseData } = editingPurchase;
+        await updateDoc(purchaseDocRef, purchaseData);
+        setPurchases(prev => prev.map(p => p.compraId === editingPurchase.compraId ? editingPurchase : p));
       }
+
       setIsModalOpen(false);
       setEditingPurchase(null);
     }
@@ -48,7 +76,7 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, projetos, 
 
   const startNew = () => {
     setEditingPurchase({
-      compraId: `PO_${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
+      compraId: `PO_NEW_${Date.now()}`,
       projetoId: projetos[0]?.projetoId || '',
       fornecedor: '',
       valorTotal: 0,
@@ -91,33 +119,43 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, projetos, 
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {purchases.map((p) => (
-              <tr key={p.compraId} className="hover:bg-svBlue/[0.02] transition-colors group">
-                <td className="px-6 py-4 font-mono text-[10px] font-bold text-svBlue">
-                  {p.compraId}
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-xs font-bold text-svBlue">{getProjectClientName(p.projetoId)}</p>
-                  <p className="text-[9px] text-svGray font-mono">{p.projetoId}</p>
-                </td>
-                <td className="px-6 py-4 text-xs font-bold text-gray-700">
-                  {p.fornecedor}
-                </td>
-                <td className="px-6 py-4 text-sm font-black text-svBlue">
-                  {formatCurrency(p.valorTotal)}
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-tighter ${getStatusColor(p.statusEntrega)}`}>
-                    {p.statusEntrega}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button onClick={() => startEdit(p)} className="p-2 text-svBlue hover:bg-svBlue/10 rounded-lg">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                  </button>
-                </td>
+          {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Carregando compras...</td>
               </tr>
-            ))}
+            ) : purchases.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-20 text-center text-svGray text-sm italic font-medium">Nenhuma compra registrada.</td>
+              </tr>
+            ) : (
+              purchases.map((p) => (
+                <tr key={p.compraId} className="hover:bg-svBlue/[0.02] transition-colors group">
+                  <td className="px-6 py-4 font-mono text-[10px] font-bold text-svBlue">
+                    {p.compraId}
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-xs font-bold text-svBlue">{getProjectClientName(p.projetoId)}</p>
+                    <p className="text-[9px] text-svGray font-mono">{p.projetoId}</p>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-bold text-gray-700">
+                    {p.fornecedor}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-black text-svBlue">
+                    {formatCurrency(p.valorTotal)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-tighter ${getStatusColor(p.statusEntrega)}`}>
+                      {p.statusEntrega}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button onClick={() => startEdit(p)} className="p-2 text-svBlue hover:bg-svBlue/10 rounded-lg">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -135,7 +173,7 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, projetos, 
                 <select 
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold"
                   value={editingPurchase.projetoId}
-                  onChange={e => setEditingPurchase({...editingPurchase, projetoId: e.target.value})}
+                  onChange={e => setEditingPurchase({...editingPurchase, projectId: e.target.value})}
                 >
                   <option value="">Selecione o Projeto...</option>
                   {projetos.map(proj => (

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Usuario, UserRole } from '../types';
+import { Usuario, UserRole } from '../src/types';
 
 interface UserManagerProps {
   usuarios: Usuario[];
@@ -51,8 +51,8 @@ const UserManager: React.FC<UserManagerProps> = ({ usuarios, onUpdateUsuarios })
   };
 
   const filteredUsers = usuarios.filter(u => 
-    u.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (u.nome && u.nome.toLowerCase().includes(searchTerm.toLowerCase())) || 
+    (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -114,11 +114,13 @@ const UserManager: React.FC<UserManagerProps> = ({ usuarios, onUpdateUsuarios })
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                   <p className="text-[8px] font-black text-gray-500 uppercase mb-1">Departamento</p>
-                  <p className="text-xs font-bold">{u.departamento}</p>
+                  <p className="text-xs font-bold">{u.departamento || 'N/A'}</p>
                 </div>
                 <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                   <p className="text-[8px] font-black text-gray-500 uppercase mb-1">Último Acesso</p>
-                  <p className="text-xs font-bold text-gray-400">{u.dataUltimoAcesso.split(' ')[0]}</p>
+                  <p className="text-xs font-bold text-gray-400">
+                    {typeof u.dataUltimoAcesso === 'string' ? u.dataUltimoAcesso.split(' ')[0] : 'Nunca'}
+                  </p>
                 </div>
               </div>
             </div>
