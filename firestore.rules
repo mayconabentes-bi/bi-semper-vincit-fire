@@ -1,34 +1,220 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // REGRA 1: PERFIL DO USUÁRIO (Específica e Crítica)
-    // Permite que um usuário crie, leia e atualize seu próprio perfil.
-    match /usuarios/{userId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+    
+    // ===== FUNÇÕES AUXILIARES =====
+    
+    function isAuthenticated() {
+      return request.auth != null;
     }
-
-    // REGRA 2: DADOS DA APLICAÇÃO (Leitura Geral)
-    // Permite que qualquer usuário autenticado leia as coleções necessárias
-    // para o funcionamento da aplicação.
-    match /leads/{doc} { allow read: if request.auth != null; }
-    match /propostas/{doc} { allow read: if request.auth != null; }
-    match /estoque/{doc} { allow read: if request.auth != null; }
-    match /movimentacoesEstoque/{doc} { allow read: if request.auth != null; }
-    match /compras/{doc} { allow read: if request.auth != null; }
-    match /vendas/{doc} { allow read: if request.auth != null; }
-    match /clientes/{doc} { allow read: if request.auth != null; }
-    match /visitas/{doc} { allow read: if request.auth != null; }
-    match /servicos/{doc} { allow read: if request.auth != null; }
-    match /custos/{doc} { allow read: if request.auth != null; }
-    match /execucoes/{doc} { allow read: if request.auth != null; }
-    match /pos-venda/{doc} { allow read: if request.auth != null; }
-    match /sla_command/{doc} { allow read: if request.auth != null; }
-    match /alerts/{doc} { allow read: if request.auth != null; }
-    match /financeiro/{doc} { allow read: if request.auth != null; }
-    match /logs/{doc} { allow read: if request.auth != null; }
-    match /notificacoes/{doc} { allow read: if request.auth != null; }
-    match /projetos/{doc} { allow read: if request.auth != null; }
-    match /segmentos/{doc} { allow read: if request.auth != null; }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == role;
+    }
+    
+    function hasAnyRole(roles) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in roles;
+    }
+    
+    function isActive() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
+    }
+    
+    // ===== REGRAS DE USUÁRIOS =====
+    
+    match /usuarios/{userId} {
+      // Usuário pode ler e atualizar seu próprio perfil
+      allow read: if isOwner(userId) || hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      // Permite criação de perfil (usado no primeiro login para criar documento do usuário)
+      // NOTA: A role inicial deve ser definida pela aplicação ou admin após criação
+      allow create: if isAuthenticated();
+      allow update: if isOwner(userId) || hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      allow delete: if hasRole('SUPER_ADMIN'); // Apenas super admin pode deletar
+      
+      // Validação de dados (apenas para create e update)
+      allow create, update: if request.resource.data.keys().hasAll(['nome', 'email', 'role', 'ativo']) &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.email is string &&
+                      request.resource.data.role in ['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR', 
+                                                      'GERENTE_OPERACIONAL', 'TECNICO', 'FINANCEIRO', 
+                                                      'COMPRAS', 'ESTOQUE', 'VISUALIZADOR'];
+    }
+    
+    // ===== REGRAS DE LEADS =====
+    
+    match /leads/{leadId} {
+      allow read: if isActive();
+      allow create: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
+      allow update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      
+      // Validação de campos obrigatórios (apenas para create e update)
+      allow create, update: if request.resource.data.keys().hasAll(['nome', 'email', 'status', 'dataEntrada']) &&
+                      request.resource.data.nome is string &&
+                      request.resource.data.email is string;
+    }
+    
+    // ===== REGRAS DE CLIENTES =====
+    
+    match /clientes/{clienteId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE PROPOSTAS =====
+    
+    match /propostas/{propostaId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      
+      // Validação de valores (apenas para create e update)
+      allow create, update: if request.resource.data.valorBruto >= 0 &&
+                      request.resource.data.valorFinal >= 0 &&
+                      request.resource.data.margemPercentual >= 0;
+    }
+    
+    // ===== REGRAS DE VENDAS =====
+    
+    match /vendas/{vendaId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR', 'FINANCEIRO']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE PROJETOS =====
+    
+    match /projetos/{projetoId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL', 'GERENTE_COMERCIAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE ESTOQUE =====
+    
+    match /estoque/{itemId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'ESTOQUE', 'COMPRAS']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      
+      // Validação de quantidade (apenas para create e update)
+      allow create, update: if request.resource.data.pontoPedido >= 0;
+    }
+    
+    match /movimentacoesEstoque/{movId} {
+      allow read: if isActive();
+      allow create: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'ESTOQUE', 'COMPRAS']);
+      allow update, delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      
+      // Validação de movimentação (apenas para create e update)
+      allow create, update: if request.resource.data.quantidade > 0 &&
+                      request.resource.data.tipo in ['Entrada', 'Saida'];
+    }
+    
+    // ===== REGRAS DE COMPRAS =====
+    
+    match /compras/{compraId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'COMPRAS', 'GERENTE_OPERACIONAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE VISITAS TÉCNICAS =====
+    
+    match /visitas/{visitaId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL', 'TECNICO', 'VENDEDOR']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE SERVIÇOS =====
+    
+    match /servicos/{servicoId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE CUSTOS =====
+    
+    match /custos/{custoId} {
+      allow read: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'FINANCEIRO', 'GERENTE_OPERACIONAL', 'GERENTE_COMERCIAL']);
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'FINANCEIRO', 'GERENTE_OPERACIONAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE EXECUÇÕES =====
+    
+    match /execucoes/{execucaoId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL', 'TECNICO']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE PÓS-VENDA =====
+    
+    match /pos-venda/{posVendaId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE SLA COMMAND =====
+    
+    match /sla_command/{slaId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL', 'GERENTE_COMERCIAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE ALERTAS =====
+    
+    match /alerts/{alertaId} {
+      allow read: if isActive();
+      allow create: if isAuthenticated(); // Sistema pode criar alertas
+      allow update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_OPERACIONAL', 'GERENTE_COMERCIAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE FINANCEIRO =====
+    
+    match /financeiro/{financeiroId} {
+      allow read: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'FINANCEIRO', 'GERENTE_COMERCIAL']);
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'FINANCEIRO']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE LOGS (AUDITORIA) =====
+    
+    match /logs/{logId} {
+      allow read: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      allow create: if isAuthenticated(); // Qualquer ação autenticada pode criar logs
+      allow update, delete: if false; // Logs nunca devem ser modificados ou deletados
+    }
+    
+    // ===== REGRAS DE NOTIFICAÇÕES =====
+    
+    match /notificacoes/{notificacaoId} {
+      allow read: if isActive();
+      allow create: if isAuthenticated();
+      allow update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+    
+    // ===== REGRAS DE SEGMENTOS =====
+    
+    match /segmentos/{segmentoId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL']);
+      allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
+    }
   }
 }

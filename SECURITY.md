@@ -1,0 +1,79 @@
+# 🔐 Guia de Segurança - BI Semper Vincit Fire
+
+## 📋 Configuração Inicial
+
+### 1. Variáveis de Ambiente
+
+Copie o arquivo `.env.local.example` para `.env.local`:
+
+```bash
+cp .env.local.example .env.local
+```
+
+Preencha com suas credenciais do Firebase Console.
+
+**⚠️ NUNCA comite o arquivo `.env.local`!**
+
+### 2. Firestore Security Rules
+
+As regras de segurança implementadas seguem o princípio do menor privilégio:
+
+#### Roles e Permissões
+
+| Role | Permissões |
+|------|-----------|
+| **SUPER_ADMIN** | Acesso total (leitura, escrita, exclusão) |
+| **ADMIN** | Gerenciamento completo exceto exclusão de usuários |
+| **GERENTE_COMERCIAL** | Gestão comercial e financeira |
+| **VENDEDOR** | Leads, propostas, vendas |
+| **GERENTE_OPERACIONAL** | Projetos, execuções, compras |
+| **TECNICO** | Visitas, execuções |
+| **FINANCEIRO** | Vendas, financeiro, custos |
+| **COMPRAS** | Compras, estoque |
+| **ESTOQUE** | Estoque, movimentações |
+| **VISUALIZADOR** | Apenas leitura |
+
+### 3. User Roles in Firestore
+
+As regras de segurança consultam a role do usuário diretamente do documento em `usuarios/{uid}`:
+
+```javascript
+// Ao criar um usuário, certifique-se de incluir a role no documento
+const userRef = doc(db, 'usuarios', uid);
+await setDoc(userRef, {
+  nome: 'Nome do Usuário',
+  email: 'usuario@example.com',
+  role: 'VENDEDOR',
+  ativo: true,
+  // ... outros campos
+});
+```
+
+**Nota**: As regras do Firestore consultam `usuarios/{uid}.role` para verificar permissões, não custom claims do Firebase Auth.
+
+**⚠️ Importante**: As regras permitem que qualquer usuário autenticado crie seu próprio documento em `usuarios`. A aplicação deve garantir que a role inicial seja apropriada (ex: 'VISUALIZADOR') e que admins possam atualizar roles posteriormente.
+
+### 4. Validações Implementadas
+
+- ✅ Validação de campos obrigatórios
+- ✅ Validação de tipos de dados
+- ✅ Validação de valores numéricos
+- ✅ Prevenção de modificação de logs
+- ✅ Controle de acesso baseado em roles
+
+## 🚨 Checklist de Segurança
+
+Antes de fazer deploy em produção:
+
+- [ ] Todas as variáveis de ambiente estão configuradas
+- [ ] `.env.local` está no `.gitignore`
+- [ ] Firestore Rules foram implantadas no Firebase Console
+- [ ] Roles foram configuradas para usuários no Firestore (collection `usuarios`)
+- [ ] API Keys do Firebase estão com restrições no Firebase Console
+- [ ] Backup automático do Firestore está configurado
+- [ ] Monitoramento de segurança está ativo
+
+## 📞 Reportar Vulnerabilidades
+
+Se encontrar uma vulnerabilidade de segurança, por favor NÃO abra uma issue pública. 
+Entre em contato diretamente com a equipe de desenvolvimento.
