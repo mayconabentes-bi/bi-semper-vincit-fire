@@ -32,7 +32,9 @@ service cloud.firestore {
     match /usuarios/{userId} {
       // Usuário pode ler e atualizar seu próprio perfil
       allow read: if isOwner(userId) || hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
-      allow create: if isAuthenticated(); // Permite criação de perfil
+      // Permite criação de perfil (usado no primeiro login para criar documento do usuário)
+      // NOTA: A role inicial deve ser definida pela aplicação ou admin após criação
+      allow create: if isAuthenticated();
       allow update: if isOwner(userId) || hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       allow delete: if hasRole('SUPER_ADMIN'); // Apenas super admin pode deletar
       

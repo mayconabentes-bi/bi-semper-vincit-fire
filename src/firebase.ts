@@ -23,7 +23,7 @@ const requiredEnvVars = [
   'VITE_FIREBASE_APP_ID'
 ];
 
-const missingVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+const missingVars = requiredEnvVars.filter(varName => !import.meta.env[varName] || import.meta.env[varName] === '');
 if (missingVars.length > 0) {
   throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
 }

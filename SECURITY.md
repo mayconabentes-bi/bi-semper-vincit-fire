@@ -51,6 +51,8 @@ await setDoc(userRef, {
 
 **Nota**: As regras do Firestore consultam `usuarios/{uid}.role` para verificar permissões, não custom claims do Firebase Auth.
 
+**⚠️ Importante**: As regras permitem que qualquer usuário autenticado crie seu próprio documento em `usuarios`. A aplicação deve garantir que a role inicial seja apropriada (ex: 'VISUALIZADOR') e que admins possam atualizar roles posteriormente.
+
 ### 4. Validações Implementadas
 
 - ✅ Validação de campos obrigatórios
@@ -66,7 +68,7 @@ Antes de fazer deploy em produção:
 - [ ] Todas as variáveis de ambiente estão configuradas
 - [ ] `.env.local` está no `.gitignore`
 - [ ] Firestore Rules foram implantadas no Firebase Console
-- [ ] Custom claims foram configurados para usuários
+- [ ] Roles foram configuradas para usuários no Firestore (collection `usuarios`)
 - [ ] API Keys do Firebase estão com restrições no Firebase Console
 - [ ] Backup automático do Firestore está configurado
 - [ ] Monitoramento de segurança está ativo
