@@ -33,14 +33,23 @@ As regras de segurança implementadas seguem o princípio do menor privilégio:
 | **ESTOQUE** | Estoque, movimentações |
 | **VISUALIZADOR** | Apenas leitura |
 
-### 3. Custom Claims (Firebase)
+### 3. User Roles in Firestore
 
-Para que as regras de role funcionem, configure custom claims no Firebase:
+As regras de segurança consultam a role do usuário diretamente do documento em `usuarios/{uid}`:
 
 ```javascript
-// Cloud Function para setar role
-admin.auth().setCustomUserClaims(uid, { role: 'ADMIN' });
+// Ao criar um usuário, certifique-se de incluir a role no documento
+const userRef = doc(db, 'usuarios', uid);
+await setDoc(userRef, {
+  nome: 'Nome do Usuário',
+  email: 'usuario@example.com',
+  role: 'VENDEDOR',
+  ativo: true,
+  // ... outros campos
+});
 ```
+
+**Nota**: As regras do Firestore consultam `usuarios/{uid}.role` para verificar permissões, não custom claims do Firebase Auth.
 
 ### 4. Validações Implementadas
 

@@ -36,8 +36,8 @@ service cloud.firestore {
       allow update: if isOwner(userId) || hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       allow delete: if hasRole('SUPER_ADMIN'); // Apenas super admin pode deletar
       
-      // Validação de dados
-      allow write: if request.resource.data.keys().hasAll(['nome', 'email', 'role', 'ativo']) &&
+      // Validação de dados (apenas para create e update)
+      allow create, update: if request.resource.data.keys().hasAll(['nome', 'email', 'role', 'ativo']) &&
                       request.resource.data.nome is string &&
                       request.resource.data.email is string &&
                       request.resource.data.role in ['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR', 
@@ -53,8 +53,8 @@ service cloud.firestore {
       allow update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
       allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       
-      // Validação de campos obrigatórios
-      allow write: if request.resource.data.keys().hasAll(['nome', 'email', 'status', 'dataEntrada']) &&
+      // Validação de campos obrigatórios (apenas para create e update)
+      allow create, update: if request.resource.data.keys().hasAll(['nome', 'email', 'status', 'dataEntrada']) &&
                       request.resource.data.nome is string &&
                       request.resource.data.email is string;
     }
@@ -74,8 +74,8 @@ service cloud.firestore {
       allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'GERENTE_COMERCIAL', 'VENDEDOR']);
       allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       
-      // Validação de valores
-      allow write: if request.resource.data.valorBruto >= 0 &&
+      // Validação de valores (apenas para create e update)
+      allow create, update: if request.resource.data.valorBruto >= 0 &&
                       request.resource.data.valorFinal >= 0 &&
                       request.resource.data.margemPercentual >= 0;
     }
@@ -103,8 +103,8 @@ service cloud.firestore {
       allow create, update: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'ESTOQUE', 'COMPRAS']);
       allow delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       
-      // Validação de quantidade
-      allow write: if request.resource.data.pontoPedido >= 0;
+      // Validação de quantidade (apenas para create e update)
+      allow create, update: if request.resource.data.pontoPedido >= 0;
     }
     
     match /movimentacoesEstoque/{movId} {
@@ -112,9 +112,9 @@ service cloud.firestore {
       allow create: if isActive() && hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'ESTOQUE', 'COMPRAS']);
       allow update, delete: if hasAnyRole(['SUPER_ADMIN', 'ADMIN']);
       
-      // Validação de movimentação
-      allow write: if request.resource.data.quantidade > 0 &&
-                      request.resource.data.tipo in ['Entrada', 'Saída'];
+      // Validação de movimentação (apenas para create e update)
+      allow create, update: if request.resource.data.quantidade > 0 &&
+                      request.resource.data.tipo in ['Entrada', 'Saida'];
     }
     
     // ===== REGRAS DE COMPRAS =====
